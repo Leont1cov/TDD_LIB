@@ -6,22 +6,46 @@
 
 namespace MereTDD
 {
-    class TestInterface
+    class TestBase
     {
+        std::string mName;   // название теста
+        bool mPassed;        // результат теста
+        std::string mReason; // причина провала теста
     public:
-        virtual ~TestInterface() = default;
+        TestBase(std::string_view name): mName{ name }, mPassed{ true }
+        {}
+        virtual ~TestBase() = default;
         virtual void run() = 0;
+        // геттеры
+        std::string_view name() const
+        {
+            return mName;
+        }
+        bool passed() const
+        {
+            return mPassed;
+        }
+        std::string_view reason() const
+        {
+            return mReason;
+        }
+        // 
+        void setFailed(std::string_view reason)
+        {
+            mPassed = false;
+            mReason = reason;
+        }
     };
 
-    inline std::vector<TestInterface*>& getTests()
+    inline std::vector<TestBase*>& getTests()
     {
-        static std::vector<TestInterface*> tests;
+        static std::vector<TestBase*> tests;
         return tests;
     }
 
     inline void runTests()
     {
-        for(MereTDD::TestInterface* test: MereTDD::getTests())
+        for(MereTDD::TestBase* test: MereTDD::getTests())
         {
             try
             {
@@ -37,7 +61,7 @@ namespace MereTDD
 
 // начало определения макроса теста >>>
 #define TEST \
-class Test: public MereTDD::TestInterface\
+class Test: public MereTDD::TestBase\
 {\
     std::string mName;\
     bool mResult;\
