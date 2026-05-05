@@ -1,12 +1,8 @@
-#include "../test.h" // определение макроса теста
+#include "../Test.h"
 
 #include <iostream>
 
-int main()
+int main ()
 {
-    //MereTDD::runTests(); // запуск тестов
-
-    //return 0;
-
-    return MereTDD::runTests(std::cout); // запуск тестов
+    return MereTDD::runTests(std::cout);
 }

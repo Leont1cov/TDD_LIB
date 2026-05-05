@@ -1,14 +1,38 @@
-#include <iostream>
-#include "../test.h" // определение макроса теста
+#include "../Test.h"
 
-// определение теста
-TEST("Тест первый")
+TEST("Test can be created")
 {
-    //
 }
 
-// определение теста
-TEST("Тест второй")
+TEST("Test that throws unexpectedly can be created")
 {
-    throw 1; // выбросить исключение (ошибка)
+    setExpectedFailureReason(
+        "Unexpected exception thrown.");
+
+    throw "Unexpected";
+}
+
+TEST("Test that should throw unexpectedly can be created")
+{
+    setExpectedFailureReason(
+        "Unexpected exception thrown.");
+}
+
+TEST_EX("Test with throw can be created", int)
+{
+    throw 1;
+}
+
+TEST_EX("Test that never throws can be created", int)
+{
+    setExpectedFailureReason(
+        "Expected exception type int was not thrown.");
+}
+
+TEST_EX("Test that throws wrong type can be created", int)
+{
+    setExpectedFailureReason(
+        "Unexpected exception thrown.");
+
+    throw "Wrong type";
 }
