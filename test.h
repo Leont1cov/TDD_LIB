@@ -2,9 +2,9 @@
 #define MERETDD_TEST_H
 
 #include <ostream>
+#include <string>
 #include <string_view>
 #include <vector>
-#include <string>
 
 namespace MereTDD
 {
@@ -12,7 +12,10 @@ namespace MereTDD
 class ConfirmException
 {
 public:
-    ConfirmException () = default;
+    ConfirmException (int line)
+    : mLine(line)
+    { }
+
     virtual ~ConfirmException () = default;
 
     std::string_view reason () const
@@ -20,20 +23,50 @@ public:
         return mReason;
     }
 
+    int line () const
+    {
+        return mLine;
+    }
+
 protected:
     std::string mReason;
+    int mLine;
 };
 
 class BoolConfirmException : public ConfirmException
 {
 public:
     BoolConfirmException (bool expected, int line)
+    : ConfirmException(line)
     {
-        mReason =  "Confirm failed on line ";
-        mReason += std::to_string(line) + "\n";
         mReason += "    Expected: ";
         mReason += expected ? "true" : "false";
     }
+};
+
+class ActualConfirmException : public ConfirmException
+{
+public:
+    ActualConfirmException (
+        std::string_view expected,
+        std::string_view actual,
+        int line)
+    : ConfirmException(line),
+      mExpected(expected),
+      mActual(actual)
+    {
+        formatReason();
+    }
+
+private:
+    void formatReason ()
+    {
+        mReason += "    Expected: " + mExpected + "\n";
+        mReason += "    Actual  : " + mActual;
+    }
+
+    std::string mExpected;
+    std::string mActual;
 };
 
 class MissingException
@@ -52,11 +85,107 @@ private:
     std::string mExType;
 };
 
+inline void confirm (
+    bool expected,
+    bool actual,
+    int line)
+{
+    if (actual != expected)
+    {
+        throw BoolConfirmException(expected, line);
+    }
+}
+
+inline void confirm (
+    std::string_view expected,
+    std::string_view actual,
+    int line)
+{
+    if (actual != expected)
+    {
+        throw ActualConfirmException(
+            expected,
+            actual,
+            line);
+    }
+}
+
+inline void confirm (
+    std::string const & expected,
+    std::string const & actual,
+    int line)
+{
+    confirm(
+        std::string_view(expected),
+        std::string_view(actual),
+        line);
+}
+
+inline void confirm (
+    float expected,
+    float actual,
+    int line)
+{
+    if (actual < (expected - 0.0001f) ||
+        actual > (expected + 0.0001f))
+    {
+        throw ActualConfirmException(
+            std::to_string(expected),
+            std::to_string(actual),
+            line);
+    }
+}
+
+inline void confirm (
+    double expected,
+    double actual,
+    int line)
+{
+    if (actual < (expected - 0.000001) ||
+        actual > (expected + 0.000001))
+    {
+        throw ActualConfirmException(
+            std::to_string(expected),
+            std::to_string(actual),
+            line);
+    }
+}
+
+inline void confirm (
+    long double expected,
+    long double actual,
+    int line)
+{
+    if (actual < (expected - 0.000001) ||
+        actual > (expected + 0.000001))
+    {
+        throw ActualConfirmException(
+            std::to_string(expected),
+            std::to_string(actual),
+            line);
+    }
+}
+
+template <typename T>
+void confirm (
+    T const & expected,
+    T const & actual,
+    int line)
+{
+    if (actual != expected)
+    {
+        throw ActualConfirmException(
+            std::to_string(expected),
+            std::to_string(actual),
+            line);
+    }
+}
+
 class TestBase
 {
 public:
     TestBase (std::string_view name)
-    : mName(name), mPassed(true)
+    : mName(name), mPassed(true), mConfirmLocation(-1)
     { }
 
     virtual ~TestBase () = default;
@@ -83,15 +212,21 @@ public:
         return mReason;
     }
 
+    int confirmLocation () const
+    {
+        return mConfirmLocation;
+    }
+
     std::string_view expectedReason () const
     {
         return mExpectedReason;
     }
 
-    void setFailed (std::string_view reason)
+    void setFailed (std::string_view reason, int confirmLocation = -1)
     {
         mPassed = false;
         mReason = reason;
+        mConfirmLocation = confirmLocation;
     }
 
     void setExpectedFailureReason (std::string_view reason)
@@ -104,6 +239,7 @@ private:
     bool mPassed;
     std::string mReason;
     std::string mExpectedReason;
+    int mConfirmLocation;
 };
 
 inline std::vector<TestBase *> & getTests ()
@@ -134,7 +270,7 @@ inline int runTests (std::ostream & output)
         }
         catch (ConfirmException const & ex)
         {
-            test->setFailed(ex.reason());
+            test->setFailed(ex.reason(), ex.line());
         }
         catch (MissingException const & ex)
         {
@@ -170,13 +306,21 @@ inline int runTests (std::ostream & output)
             ++numPassed;
             output << "Expected failure\n"
                 << test->reason()
-                << std::endl; 
+                << std::endl;
         }
         else
         {
             ++numFailed;
-            output << "Failed\n"
-                << test->reason()
+            if (test->confirmLocation() != -1)
+            {
+                output << "Failed confirm on line "
+                    << test->confirmLocation() << "\n";
+            }
+            else
+            {
+                output << "Failed\n";
+            }
+            output << test->reason()
                 << std::endl;
         }
     }
@@ -215,7 +359,7 @@ public: \
     } \
     void run () override; \
 }; \
-}  \
+} \
 MERETDD_CLASS MERETDD_INSTANCE(testName); \
 void MERETDD_CLASS::run ()
 
@@ -248,15 +392,10 @@ MERETDD_CLASS MERETDD_INSTANCE(testName); \
 void MERETDD_CLASS::run ()
 
 #define CONFIRM_FALSE( actual ) \
-if (actual) \
-{ \
-    throw MereTDD::BoolConfirmException(false, __LINE__); \
-}
-
+    MereTDD::confirm(false, actual, __LINE__)
 #define CONFIRM_TRUE( actual ) \
-if (not actual) \
-{ \
-    throw MereTDD::BoolConfirmException(true, __LINE__); \
-}
+    MereTDD::confirm(true, actual, __LINE__)
+#define CONFIRM( expected, actual ) \
+    MereTDD::confirm(expected, actual, __LINE__)
 
 #endif 
