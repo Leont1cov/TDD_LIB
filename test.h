@@ -2,9 +2,9 @@
 #define MERETDD_TEST_H
 
 #include <ostream>
-#include <string>
 #include <string_view>
 #include <vector>
+#include <string>
 
 namespace MereTDD
 {
@@ -181,12 +181,23 @@ void confirm (
     }
 }
 
+class TestBase;
+
+inline std::vector<TestBase *> & getTests ()
+{
+    static std::vector<TestBase *> tests;
+
+    return tests;
+}
+
 class TestBase
 {
 public:
     TestBase (std::string_view name)
     : mName(name), mPassed(true), mConfirmLocation(-1)
-    { }
+    {
+        getTests().push_back(this);
+    }
 
     virtual ~TestBase () = default;
 
@@ -242,12 +253,32 @@ private:
     int mConfirmLocation;
 };
 
-inline std::vector<TestBase *> & getTests ()
+template <typename ExceptionT>
+class TestExBase : public TestBase
 {
-    static std::vector<TestBase *> tests;
+public:
+    TestExBase (std::string_view name,
+        std::string_view exceptionName)
+    : TestBase(name), mExceptionName(exceptionName)
+    { }
 
-    return tests;
-}
+    void runEx () override
+    {
+        try
+        {
+            run();
+        }
+        catch (ExceptionT const &)
+        {
+            return;
+        }
+
+        throw MissingException(mExceptionName);
+    }
+
+private:
+    std::string mExceptionName;
+};
 
 inline int runTests (std::ostream & output)
 {
@@ -354,41 +385,26 @@ class MERETDD_CLASS : public MereTDD::TestBase \
 public: \
     MERETDD_CLASS (std::string_view name) \
     : TestBase(name) \
-    { \
-        MereTDD::getTests().push_back(this); \
-    } \
+    { } \
     void run () override; \
 }; \
-} \
+}\
 MERETDD_CLASS MERETDD_INSTANCE(testName); \
 void MERETDD_CLASS::run ()
 
 #define TEST_EX( testName, exceptionType ) \
 namespace { \
-class MERETDD_CLASS : public MereTDD::TestBase \
+class MERETDD_CLASS : public MereTDD::TestExBase<exceptionType> \
 { \
 public: \
-    MERETDD_CLASS (std::string_view name) \
-    : TestBase(name) \
-    { \
-        MereTDD::getTests().push_back(this); \
-    } \
-    void runEx () override \
-    { \
-        try \
-        { \
-            run(); \
-        } \
-        catch (exceptionType const &) \
-        { \
-            return; \
-        } \
-        throw MereTDD::MissingException(#exceptionType); \
-    } \
+    MERETDD_CLASS (std::string_view name, \
+        std::string_view exceptionName) \
+    : TestExBase(name, exceptionName) \
+    { } \
     void run () override; \
 }; \
 } \
-MERETDD_CLASS MERETDD_INSTANCE(testName); \
+MERETDD_CLASS MERETDD_INSTANCE(testName, #exceptionType); \
 void MERETDD_CLASS::run ()
 
 #define CONFIRM_FALSE( actual ) \
